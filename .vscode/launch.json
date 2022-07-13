@@ -8,8 +8,8 @@
       "name": "Python: Current File",
       "type": "python",
       "request": "launch",
-      "program": "${file}",
-      "args": ["ayah_2.txt"],
+      "program": "parsing.py",
+      "args": ["hostname.tsv", "iface.tsv", "macaddress.tsv", "output.tsv"],
       "console": "integratedTerminal",
       "justMyCode": true
     }
