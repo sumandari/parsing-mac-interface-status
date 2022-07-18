@@ -9,7 +9,7 @@
       "type": "python",
       "request": "launch",
       "program": "parsing.py",
-      "args": ["hostname.tsv", "iface.tsv", "macaddress.tsv", "output.tsv"],
+      "args": ["input.txt", "macaddress.tsv", "output.tsv"],
       "console": "integratedTerminal",
       "justMyCode": true
     }
