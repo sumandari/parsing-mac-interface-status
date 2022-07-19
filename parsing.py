@@ -1,5 +1,4 @@
 import ast
-from code import interact
 import csv
 import errno
 import os
@@ -7,19 +6,32 @@ import re
 import sys
 from pathlib import Path
 
+from openpyxl import Workbook
+
+from mac_vendor_lookup import AsyncMacLookup, MacLookup
+
+
+
+SHEETNAME = 'output'
+
+
+def lookup_mac_vendor(macaddress):
+    # The mac_vendor_lookup library provides async class version,
+    # but somehow it always throws an exception:
+    # RuntimeWarning: coroutine 'lookup_mac_vendor' was never awaited.
+    # probably we can address it sometime... someday...
+    mac = MacLookup()
+    return mac.lookup(macaddress)
+
 
 def parsing(iface, mac_address, output):
     """Parsing files"""
 
     print("Start parsing...")
 
-    # Eventhough the files extension is tsv, it turns out that
-    # they have space as separator instead of tab.
-    # If you can provide files in "real" tsv format,
-    # we can parse it in a better way
-    # with open(hostname, 'r') as f:
-    #     hostname_value = f.readline().split()[-1]
-    #     print(f"Hostname: '{hostname_value}'")
+    wb = Workbook()
+    wb.create_sheet(index=0, title=SHEETNAME)
+    sheet = wb[SHEETNAME]
 
     macs = []
     with open(mac_address) as f:
@@ -47,10 +59,12 @@ def parsing(iface, mac_address, output):
 
     with open(output, mode='w') as f:
         fieldnames = ['hostname', 'port', 'name', 'status',
-                      'vlan', 'duplex', 'speed', 'macAddress']
+                      'vlan', 'duplex', 'speed', 'macAddress', 'macVendor']
         writer = csv.DictWriter(
             f, fieldnames=fieldnames, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         writer.writeheader()
+
+        sheet.append(fieldnames)
 
         hostname = ifaces.get('ansible_net_hostname', None)
 
@@ -69,9 +83,13 @@ def parsing(iface, mac_address, output):
                 duplex = iface_data[port].get('duplex', None)
                 speed = iface_data[port].get('bandwidth', None)
                 vlan = None
+                mac = None
+                mac_vendor = None
                 if ifaces['ansible_net_neighbors'].get(port, None):
                     mac_array = ifaces['ansible_net_neighbors'][port]
                     mac = ",".join([_['host'] for _ in mac_array])
+
+                    mac_vendor = lookup_mac_vendor(mac_array[0]['host'])
 
                     # e.g port = Ethernet123, mac_alias = Et123
                     port_name_pattern = re.findall(
@@ -87,8 +105,6 @@ def parsing(iface, mac_address, output):
                         if port_alias in m and mac_array[0]['port'] in m:
                             vlan = m[2]
 
-                else:
-                    mac = None
                 writer.writerow({
                     'hostname': hostname,
                     'port': port,
@@ -97,10 +113,25 @@ def parsing(iface, mac_address, output):
                     'duplex': duplex,
                     'speed': speed,
                     'macAddress': mac,
+                    'macVendor': mac_vendor,
                     'vlan': vlan,
                 })
+
+                sheet.append((
+                    hostname,
+                    port,
+                    name,
+                    status,
+                    vlan,
+                    duplex,
+                    speed,
+                    mac,
+                    mac_vendor
+                ))
+
             except KeyError as e:
                 print(f"Invalid interfaces data in port {port}.", e.__str__())
+            wb.save('output.xlsx')
 
 
 def check_if_exist(filename):
