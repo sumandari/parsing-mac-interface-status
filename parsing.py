@@ -72,7 +72,6 @@ def parsing_mac_address(file):
         return macs
 
 
-
 def parsing(iface, mac_address, output):
     """Parsing files"""
 
@@ -144,6 +143,7 @@ def parsing(iface, mac_address, output):
                 print(f"Invalid interfaces data in port {port}.", e.__str__())
             wb.save(f'{output}.xlsx')
 
+
 def parsing_interface(iface, mac_address):
     """Parsing files"""
 
@@ -207,9 +207,8 @@ def parsing_interface(iface, mac_address):
 
 
 def save_to_xlsx(iface, mac_addres, output):
-    from random import randint
     data = parsing_interface(iface, mac_addres)
-    hostname = f"{data[0][0]}-{randint(0,10)}"
+    hostname = f"{data[0][0]}"
     wb = load_workbook(output)
     wb.create_sheet(index=0, title=hostname)
     sheet = wb[hostname]
@@ -232,18 +231,24 @@ def check_if_exist(filename):
 
 if __name__ == "__main__":
     args = sys.argv
-    if len(args) < 4:
+    if len(args) < 3:
         raise TypeError(
             f"Command must be: parsing.py <file1> <file2> <output>"
         )
-    iface = check_if_exist(args[1])
-    mac_address = check_if_exist(args[2])
-    output = args[3]
+    # iface = check_if_exist(args[1])
+    # mac_address = check_if_exist(args[2])
+    
+    output = args[-1]
+    wb = Workbook()
+    wb.save(f'{output}')
 
-    if iface and mac_address:
+    for arg in args[1:-1]:
+        files = arg.split(',')
+        iface = check_if_exist(files[0])
+        mac_address = check_if_exist(files[1])
+
+        if iface and mac_address:
         # parsing(iface, mac_address, output)
-        wb = Workbook()
-        wb.save(f'{output}')
-        save_to_xlsx(iface, mac_address, output)
-        save_to_xlsx(iface, mac_address, output)
-        save_to_xlsx(iface, mac_address, output)
+        
+            save_to_xlsx(iface, mac_address, output)
+        
