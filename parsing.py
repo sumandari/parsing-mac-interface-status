@@ -7,14 +7,33 @@ import sys
 from pathlib import Path
 from telnetlib import STATUS
 
-from openpyxl import Workbook
+from openpyxl import load_workbook, Workbook
 
 from mac_vendor_lookup import AsyncMacLookup, MacLookup
 
 
-
+FIELDNAMES = [
+    'hostname', 
+    'port', 
+    'name', 
+    'status',
+    'vlan', 
+    'duplex', 
+    'speed', 
+    'macAddress', 
+    'macVendor'
+]
 SHEETNAME = 'output'
 STATUS = 'connected'
+
+
+def get_port_alias(port):
+    # e.g port = Ethernet123, mac_alias = Et123
+    port_name_pattern = re.findall(
+        r'([a-zA-Z]+)([0-9]+)',
+        port
+    )
+    return port_name_pattern[0][0][0:2] + port_name_pattern[0][1]
 
 
 def lookup_mac_vendor(macaddress):
@@ -26,17 +45,9 @@ def lookup_mac_vendor(macaddress):
     return mac.lookup(macaddress)
 
 
-def parsing(iface, mac_address, output):
-    """Parsing files"""
-
-    print("Start parsing...")
-
-    wb = Workbook()
-    wb.create_sheet(index=0, title=SHEETNAME)
-    sheet = wb[SHEETNAME]
-
-    macs = []
-    with open(mac_address) as f:
+def parsing_mac_address(file):
+    macs = {}
+    with open(file) as f:
         lines = f.readlines()
         for _ in lines[5:-1]:
             if _.startswith("Total Mac Addresses for this criterion:"):
@@ -47,8 +58,29 @@ def parsing(iface, mac_address, output):
             mac_type = line[2]
             port = line[3]
             if vlan and mac and port and mac_type == 'STATIC':
-                macs.append((port, mac, vlan))
-            print(macs)
+                try:
+                    mac_vendor = lookup_mac_vendor(mac)
+                except Exception as e:
+                    print('exception', e)
+                    mac_vendor = ''
+
+                macs[port] = {
+                    'vlan': vlan, 
+                    'mac': mac, 
+                    'macVendor': mac_vendor
+                }
+        return macs
+
+
+
+def parsing(iface, mac_address, output):
+    """Parsing files"""
+
+    print("Start parsing...")
+
+    wb = Workbook()
+    wb.create_sheet(index=0, title=SHEETNAME)
+    sheet = wb[SHEETNAME]
 
     ifaces = {}
     with open(iface) as f:
@@ -62,12 +94,8 @@ def parsing(iface, mac_address, output):
     with open(output, mode='w') as f:
         fieldnames = ['hostname', 'port', 'name', 'status',
                       'vlan', 'duplex', 'speed', 'macAddress', 'macVendor']
-        writer = csv.DictWriter(
-            f, fieldnames=fieldnames, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        writer.writeheader()
 
         sheet.append(fieldnames)
-
         hostname = ifaces.get('ansible_net_hostname', None)
 
         try:
@@ -77,50 +105,28 @@ def parsing(iface, mac_address, output):
             print("Invalid interfaces data.")
             exit(1)
 
+        parsed_macs = parsing_mac_address(mac_address)
         for interface in interfaces:
             try:
                 port = interface['name']
                 status = iface_data[port].get('operstatus', None)
                 if not status or status != STATUS:
                     continue
-                name = iface_data[port].get('description', None)
                 
+                name = iface_data[port].get('description', None)
                 duplex = iface_data[port].get('duplex', None)
                 speed = iface_data[port].get('bandwidth', None)
                 vlan = None
                 mac = None
                 mac_vendor = None
-                if ifaces['ansible_net_neighbors'].get(port, None):
-                    mac_array = ifaces['ansible_net_neighbors'][port]
-                    mac = ",".join([_['host'] for _ in mac_array])
-
-                    mac_vendor = lookup_mac_vendor(mac_array[0]['host'])
-
-                    # e.g port = Ethernet123, mac_alias = Et123
-                    port_name_pattern = re.findall(
-                        r'([a-zA-Z]+)([0-9]+)',
-                        port
-                    )
-                    port_alias = (port_name_pattern[0][0][0:2] +
-                                  port_name_pattern[0][1])
-
-                    # We'll need to refactor this into separated function!
-                    # But later :P
-                    for m in macs:
-                        if port_alias in m and mac_array[0]['port'] in m:
-                            vlan = m[2]
-
-                writer.writerow({
-                    'hostname': hostname,
-                    'port': port,
-                    'name': name,
-                    'status': status,
-                    'duplex': duplex,
-                    'speed': speed,
-                    'macAddress': mac,
-                    'macVendor': mac_vendor,
-                    'vlan': vlan,
-                })
+                
+                port_alias = get_port_alias(port)
+                
+                
+                if port_alias in parsed_macs:
+                    vlan = parsed_macs[port_alias]['vlan']
+                    mac = parsed_macs[port_alias]['mac']
+                    mac_vendor = parsed_macs[port_alias]['macVendor']
 
                 sheet.append((
                     hostname,
@@ -136,7 +142,81 @@ def parsing(iface, mac_address, output):
 
             except KeyError as e:
                 print(f"Invalid interfaces data in port {port}.", e.__str__())
-            wb.save('output.xlsx')
+            wb.save(f'{output}.xlsx')
+
+def parsing_interface(iface, mac_address):
+    """Parsing files"""
+
+    print("Start parsing interface...")
+
+    result = []
+    with open(iface) as f:
+        line = f.readline()
+        data = ast.literal_eval(line.strip()[1:-1])
+        if not isinstance(data, dict):
+            print(f"Invalid file format: {iface}.")
+            exit(1)
+        ifaces = data.get('ansible_facts', None)
+        hostname = ifaces.get('ansible_net_hostname', None)
+
+        try:
+            interfaces = ifaces['ansible_network_resources']['interfaces']
+            iface_data = ifaces['ansible_net_interfaces']
+        except KeyError:
+            print("Invalid interfaces data.")
+            exit(1)
+
+        parsed_macs = parsing_mac_address(mac_address)
+        for interface in interfaces:
+            try:
+                port = interface['name']
+                status = iface_data[port].get('operstatus', None)
+                if not status or status != STATUS:
+                    continue
+                
+                name = iface_data[port].get('description', None)
+                duplex = iface_data[port].get('duplex', None)
+                speed = iface_data[port].get('bandwidth', None)
+                vlan = None
+                mac = None
+                mac_vendor = None
+                
+                port_alias = get_port_alias(port)
+                
+                
+                if port_alias in parsed_macs:
+                    vlan = parsed_macs[port_alias]['vlan']
+                    mac = parsed_macs[port_alias]['mac']
+                    mac_vendor = parsed_macs[port_alias]['macVendor']
+
+                result.append((
+                    hostname,
+                    port,
+                    name,
+                    status,
+                    vlan,
+                    duplex,
+                    speed,
+                    mac,
+                    mac_vendor
+                ))
+
+            except KeyError as e:
+                print(f"Invalid interfaces data in port {port}.", e.__str__())
+    return result
+
+
+def save_to_xlsx(iface, mac_addres, output):
+    from random import randint
+    data = parsing_interface(iface, mac_addres)
+    hostname = f"{data[0][0]}-{randint(0,10)}"
+    wb = load_workbook(output)
+    wb.create_sheet(index=0, title=hostname)
+    sheet = wb[hostname]
+    sheet.append(FIELDNAMES)
+    for row in data:
+        sheet.append(row)
+    wb.save(output)
 
 
 def check_if_exist(filename):
@@ -161,4 +241,9 @@ if __name__ == "__main__":
     output = args[3]
 
     if iface and mac_address:
-        parsing(iface, mac_address, output)
+        # parsing(iface, mac_address, output)
+        wb = Workbook()
+        wb.save(f'{output}')
+        save_to_xlsx(iface, mac_address, output)
+        save_to_xlsx(iface, mac_address, output)
+        save_to_xlsx(iface, mac_address, output)
