@@ -5,6 +5,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from telnetlib import STATUS
 
 from openpyxl import Workbook
 
@@ -13,6 +14,7 @@ from mac_vendor_lookup import AsyncMacLookup, MacLookup
 
 
 SHEETNAME = 'output'
+STATUS = 'connected'
 
 
 def lookup_mac_vendor(macaddress):
@@ -78,8 +80,11 @@ def parsing(iface, mac_address, output):
         for interface in interfaces:
             try:
                 port = interface['name']
-                name = iface_data[port].get('description', None)
                 status = iface_data[port].get('operstatus', None)
+                if not status or status != STATUS:
+                    continue
+                name = iface_data[port].get('description', None)
+                
                 duplex = iface_data[port].get('duplex', None)
                 speed = iface_data[port].get('bandwidth', None)
                 vlan = None
