@@ -20,7 +20,7 @@ FIELDNAMES = [
     'macAddress',
     'macVendor'
 ]
-STATUS = 'connected'
+STATUS = ['connected', 'up']
 
 
 def check_if_exist(filename):
@@ -43,7 +43,7 @@ def get_port_alias(port):
     """
 
     port_name_pattern = re.findall(
-        r'([a-zA-Z]+)([0-9]+)',
+        r'([a-zA-Z]+)([0-9/]+)',
         port
     )
     return port_name_pattern[0][0][0:2] + port_name_pattern[0][1]
@@ -115,7 +115,7 @@ def parsing_interface(iface, mac_address):
             try:
                 port = interface['name']
                 status = iface_data[port].get('operstatus', None)
-                if not status or status != STATUS:
+                if not status or not status in STATUS:
                     continue
 
                 name = iface_data[port].get('description', None)
