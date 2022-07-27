@@ -3,6 +3,7 @@ import errno
 import os
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from openpyxl import load_workbook, Workbook
@@ -28,11 +29,8 @@ def check_if_exist(filename):
 
     file = Path(filename)
     if not file.is_file():
-        raise FileNotFoundError(
-            errno.ENOENT,
-            os.strerror(errno.ENOENT),
-            filename
-        )
+        print(f"{filename} does not exist.")
+        return None
     return file
 
 
@@ -161,21 +159,30 @@ def save_to_xlsx(iface, mac_addres, output):
     for row in data:
         sheet.append(row)
     wb.save(output)
+    print(f"Saved data {iface} and {mac_addres} in {output}")
+
+
+def get_worksheet_name():
+    utcnow = datetime.utcnow()
+    return (
+        f"report_{utcnow.year}-{utcnow.month}"
+        f"-{utcnow.day}-{utcnow.hour}.xlsx"
+    )
 
 
 if __name__ == "__main__":
     args = sys.argv
-    if len(args) < 3:
+    if len(args) < 2:
         raise TypeError(
             "Command must be: parsing.py <iface1.txt,macs1.txt> "
-            "[<iface2.txt,macs2.txt>...] <output.xlsx>"
+            "[<iface2.txt,macs2.txt>...]"
         )
 
-    output = args[-1]
-    if not Path(output).suffix == ".xlsx":
-        raise TypeError("Output file must be .xlsx!")
-    wb = Workbook()
-    wb.save(f'{output}')
+    output = get_worksheet_name()
+    if not check_if_exist(output):
+        wb = Workbook()
+        wb.save(output)
+        print(f"Created file {output} to save the data.")
 
     for arg in args[1:-1]:
         files = arg.split(',')
