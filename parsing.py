@@ -184,7 +184,7 @@ if __name__ == "__main__":
         wb.save(output)
         print(f"Created file {output} to save the data.")
 
-    for arg in args[1:-1]:
+    for arg in args[1::]:
         files = arg.split(',')
         iface = check_if_exist(files[0])
         mac_address = check_if_exist(files[1])
