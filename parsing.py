@@ -173,7 +173,7 @@ if __name__ == "__main__":
 
     output = args[-1]
     if not Path(output).suffix == ".xlsx":
-        raise TypeError(f"Output file must be .xlsx!")
+        raise TypeError("Output file must be .xlsx!")
     wb = Workbook()
     wb.save(f'{output}')
 
