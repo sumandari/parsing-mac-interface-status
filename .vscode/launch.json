@@ -8,10 +8,11 @@
       "name": "Python: Current File",
       "type": "python",
       "request": "launch",
-      "program": "parsing.py",
-      "args": ["input.txt", "macaddress.tsv", "output.tsv"],
+      "program": "${file}",
       "console": "integratedTerminal",
-      "justMyCode": true
+      "justMyCode": true,
+      "args": ["input.txt,macaddress.tsv", "file-output.xlsx"]
     }
-  ]
+  ],
+  "python.pythonPath": "venv/bin/python"
 }
