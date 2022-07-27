@@ -167,7 +167,7 @@ if __name__ == "__main__":
     args = sys.argv
     if len(args) < 3:
         raise TypeError(
-            f"Command must be: parsing.py <iface1.txt,macs1.txt> "
+            "Command must be: parsing.py <iface1.txt,macs1.txt> "
             "[<iface2.txt,macs2.txt>...] <output.xlsx>"
         )
 
