@@ -69,13 +69,21 @@ def parsing_mac_address(file):
             mac = line[1]
             mac_type = line[2]
             port = line[3]
-            # only get the "STATIC" mac address.
-            if vlan and mac and port and mac_type == 'STATIC':
+            # There are "STATIC" and "DYNAMIC" mac addresses.
+            if vlan and mac and port:
                 try:
                     mac_vendor = lookup_mac_vendor(mac)
                 except Exception as e:
                     print('exception', e)
                     mac_vendor = ''
+
+                if mac_type == 'DYNAMIC':
+                    if port in macs:
+                        mac_vendor = (
+                            f"{macs[port]['macVendor']}; {mac_vendor}"
+                        )
+                        mac = f"{macs[port]['mac']}; {mac}"
+                        vlan = f"{macs[port]['vlan']}; {vlan}"
 
                 macs[port] = {
                     'vlan': vlan,
@@ -153,6 +161,10 @@ def save_to_xlsx(iface, mac_addres, output):
     data = parsing_interface(iface, mac_addres)
     hostname = f"{data[0][0]}"
     wb = load_workbook(output)
+    # remove default empty sheet.
+    if 'Sheet' in wb.sheetnames:
+        wb.remove(wb['Sheet'])
+    # create new sheet with hostname as sheetname.
     wb.create_sheet(title=hostname)
     sheet = wb[hostname]
     sheet.append(FIELDNAMES)
@@ -164,9 +176,10 @@ def save_to_xlsx(iface, mac_addres, output):
 
 def get_worksheet_name():
     utcnow = datetime.utcnow()
+    minutes = utcnow.minute // 10 + 1
     return (
         f"report_{utcnow.year}-{utcnow.month}"
-        f"-{utcnow.day}-{utcnow.hour}.xlsx"
+        f"-{utcnow.day}_{utcnow.hour}-{minutes}.xlsx"
     )
 
 
@@ -182,6 +195,7 @@ if __name__ == "__main__":
     if not check_if_exist(output):
         wb = Workbook()
         wb.save(output)
+
         print(f"Created file {output} to save the data.")
 
     for arg in args[1::]:
