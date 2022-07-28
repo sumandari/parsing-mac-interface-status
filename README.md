@@ -74,7 +74,7 @@ Below is the snippet of the task on the ansible playbook :
         dest: ./tmp/iface_MAC_{{ansible_net_hostname}}.txt
 ```
 
-This script is also run utilizing [mac-vendor-lookup](https://pypi.org/project/mac-vendor-lookup/) python library which will give Vendor information out of generated Mac Address.
+This script is also utilizing [mac-vendor-lookup](https://pypi.org/project/mac-vendor-lookup/) python library which will give Vendor information out of generated Mac Address.
 
 ## How to Run the script
 ### Run it directly from Python console
@@ -97,7 +97,7 @@ this will parse the files generated on previous task if placed in the same playb
 
 ## Result
 
-Microsoft Excel file report with 
+Microsoft Excel file report with list of Interface with port status , Mac vendor/address ,Vlan etc. Sheet are generated with its host name.
 
 
 
