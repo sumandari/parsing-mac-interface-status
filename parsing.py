@@ -1,6 +1,5 @@
+import argparse
 import ast
-import errno
-import os
 import re
 import sys
 from datetime import datetime
@@ -24,14 +23,23 @@ FIELDNAMES = [
 STATUS = ['connected', 'up']
 
 
-def check_if_exist(filename):
+def check_if_file_exist(filename):
     """The name already describes the function."""
 
     file = Path(filename)
     if not file.is_file():
-        print(f"{filename} does not exist.")
+        print(f"File {filename} does not exist.")
         return None
     return file
+
+
+def check_if_dir_exist(dirname):
+    """The name already describes the function."""
+
+    dir = Path(dirname)
+    if not dir.is_dir():
+        print(f"Directory {dir} does not exist.")
+        sys.exit(1)
 
 
 def get_port_alias(port):
@@ -47,11 +55,43 @@ def get_port_alias(port):
     return port_name_pattern[0][0][0:2] + port_name_pattern[0][1]
 
 
+def init_argparse() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        # usage="parsing.py [OPTION] [fileiface1,filemac1]...",
+        description="Parse mac address and interface data."
+    )
+    parser.add_argument(
+        'files', metavar='files', nargs='+',
+        help='files to parse. eg. file_iface1,file_mac1 '
+    )
+    parser.add_argument(
+        '-d', '--directory', type=str,
+        default=str(Path().absolute()),
+        help='assign local directory for output excel file.'
+    )
+    parser.add_argument(
+        '-f', '--filter', type=str,
+        help='filter mac addresses. Generates the excel output with '
+        'only the specified mac address listed in a txt file.'
+    )
+    return parser
+
+
 def lookup_mac_vendor(macaddress):
     """Get the vendor name."""
 
     mac = MacLookup()
     return mac.lookup(macaddress)
+
+
+def parsing_filter(file):
+    print("Parsing list of mac addresses filter...")
+
+    filters = []
+    with open(file) as f:
+        lines = f.readlines()
+        filters = list(map(str.strip, lines))
+    return filters
 
 
 def parsing_mac_address(file):
@@ -155,11 +195,12 @@ def parsing_interface(iface, mac_address):
     return result
 
 
-def save_to_xlsx(iface, mac_addres, output):
+def save_to_xlsx(iface, mac_addres, output, filter):
     """Save the parsed interfaces and mac addresses data in xlsx file."""
 
     data = parsing_interface(iface, mac_addres)
     hostname = f"{data[0][0]}"
+
     wb = load_workbook(output)
     # remove default empty sheet.
     if 'Sheet' in wb.sheetnames:
@@ -168,40 +209,59 @@ def save_to_xlsx(iface, mac_addres, output):
     wb.create_sheet(title=hostname)
     sheet = wb[hostname]
     sheet.append(FIELDNAMES)
-    for row in data:
-        sheet.append(row)
+
+    if filter:
+        filters = parsing_filter(filter)
+        for row in data:
+            (
+                hostname,
+                port,
+                name,
+                status,
+                vlan,
+                duplex,
+                speed,
+                mac,
+                mac_vendor
+            ) = row
+            if mac in filters:
+                sheet.append(row)
+    else:
+        for row in data:
+            sheet.append(row)
     wb.save(output)
     print(f"Saved data {iface} and {mac_addres} in {output}")
 
 
-def get_worksheet_name():
+def get_worksheet_name(dirname):
     utcnow = datetime.utcnow()
     minutes = utcnow.minute // 10 + 1
-    return (
+    filename = (
         f"report_{utcnow.year}-{utcnow.month}"
-        f"-{utcnow.day}_{utcnow.hour}-{minutes}.xlsx"
+        f"-{utcnow.day}_{utcnow.hour}-{minutes}"
     )
+    suffix = ".xlsx"
+    return str(Path(dirname, filename).with_suffix(suffix))
 
 
 if __name__ == "__main__":
-    args = sys.argv
-    if len(args) < 2:
-        raise TypeError(
-            "Command must be: parsing.py <iface1.txt,macs1.txt> "
-            "[<iface2.txt,macs2.txt>...]"
-        )
+    args_parser = init_argparse()
+    args = args_parser.parse_args()
 
-    output = get_worksheet_name()
-    if not check_if_exist(output):
+    check_if_dir_exist(args.directory)
+    output = get_worksheet_name(args.directory)
+    if not check_if_file_exist(output):
         wb = Workbook()
         wb.save(output)
-
         print(f"Created file {output} to save the data.")
 
-    for arg in args[1::]:
-        files = arg.split(',')
-        iface = check_if_exist(files[0])
-        mac_address = check_if_exist(files[1])
+    filter = args.filter
+    if filter:
+        filter = check_if_file_exist(filter)
+    for f in args.files:
+        files = f.split(',')
+        iface = check_if_file_exist(files[0])
+        mac_address = check_if_file_exist(files[1])
 
         if iface and mac_address:
-            save_to_xlsx(iface, mac_address, output)
+            save_to_xlsx(iface, mac_address, output, filter)
